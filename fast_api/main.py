@@ -1,13 +1,20 @@
-from fastapi import FastAPI, Body, Path
+from fastapi import FastAPI, Body, Path, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from fastapi.responses import HTMLResponse, JSONResponse
+
+from jwt_manager import create_token
 import time
 
 app = FastAPI()
 
 app.title = "Mi aplicacion de peliculas"
 app.version = "0.0.1"
+
+
+class User(BaseModel):
+    email: str
+    password: str
 
 class Movie(BaseModel):
     id: Optional[int] = None
@@ -53,47 +60,52 @@ def getMovie(id: int = Path(ge=1, le=2000)):
         response = JSONResponse(content={"message": "Movie not found"}, status_code=404)
     return response
 
-@app.get("/movies/", tags=['movies'])
-def getMovieByCategory(category: str):
-    moviesFiltered = [movie for movie in movies if movie['category'] == category]
-    return moviesFiltered
+@app.get("/movies/", tags=['movies'], response_model = List[Movie])
+def getMovieByCategory(category: str = Query(min_length=5, max_length=12)):
+    movie = list(filter(lambda movie: movie['id'] == id, movies))
 
-@app.post("/movies", tags=['movies'])
-def createMovie(id: int = Body(),
-                title: str = Body(),
-                overview: str = Body(),
-                year: int = Body(),
-                rating: float = Body(),
-                category: str = Body()):
-    movies.append({
-        'id': id,
-        'title': title,
-        'overview': overview,
-        'year': year,
-        'rating': rating,
-        'category': category
-    })
-    return movies
+    if len(movie):
+        response = JSONResponse(content=movie, status_code=200)
+    else:
+        response = JSONResponse(content={"message": "Movie not found"}, status_code=404)
+    return response
+
+
+@app.post("/movies", tags=['movies'], response_model=dict, status_code=201)
+def createMovie(movie: Movie):
+    movies.append(movie)
+    
+    return JSONResponse(content={"message": "Movie created successfully"}, status_code=201)
 
 @app.put("/movies/editar/{id}", tags=['movies'])
-def updateMovie(id: int,
-                title: str = Body(),
-                overview: str = Body(),
-                year: int = Body(),
-                rating: float = Body(),
-                category: str = Body()):
+def updateMovie(movie: Movie):
     for movie in movies:
         if movie['id'] == id:
-            movie['title'] = title
-            movie['overview'] = overview
-            movie['year'] = year
-            movie['rating'] = rating
-            movie['category'] = category
-    return movies
+            movie['title'] = movie.title
+            movie['overview'] = movie.overview
+            movie['year'] = movie.year
+            movie['rating'] = movie.rating
+            movie['category'] = movie.category
+    
+    return JSONResponse(content={"message": "Movie updated successfully"}, status_code=200)
 
-@app.delete("/movies/{id}", tags=['movies'])
+@app.delete("/movies/{id}", tags=['movies'], response_model=dict)
 def deleteMovie(id: int):
+
     for movie in movies:
         if movie['id'] == id:
             movies.remove(movie)
-    return movies
+
+    return JSONResponse(content={"messagge": "Movie deleted successfully"}, status_code=200)
+
+
+@app.post("/login", tags=['auth'], response_model=dict, status_code=200)
+def login(user: User):
+    if ((user.email == "admin@mail.com") and (user.password == "admin")):
+        token = create_token(data=user.model_dump())
+        result = JSONResponse(content={"token": token}, status_code=200)
+
+    else:
+        result = JSONResponse(content={"message": "Inavlid credentials"}, status_code=401)
+    
+    return result
